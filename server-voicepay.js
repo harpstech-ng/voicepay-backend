@@ -3,9 +3,6 @@ import cors from "cors";
 import dotenv from "dotenv";
 import Groq from "groq-sdk";
 import multer from "multer";
-import gTTS from 'gtts'; // NEW - for audio
-import fs from 'fs'; // NEW - for audio
-import path from 'path'; // NEW - for audio
 
 dotenv.config();
 const app = express();
@@ -248,30 +245,35 @@ app.post("/generate-receipt", async (req, res) => {
   }
 });
 
-// NEW: TEXT TO SPEECH ROUTE - ADDED AT THE END
+// NEW: GOOGLE TTS - NO FFMPEG NEEDED, WORKS ON RENDER
 app.post("/speak", async (req, res) => {
   try {
     const { text, language = 'yo' } = req.body;
     if (!text) return res.status(400).json({ error: "text is required" });
 
-    console.log(`[TTS] Lang:${language} Text:${text.substring(0,40)}...`);
+    console.log(`[GOOGLE TTS] Lang:${language} Text:${text.substring(0,40)}...`);
 
-    // Map language codes for gTTS
-    const langMap = { en: 'en', yo: 'yo', ha: 'ha', ig: 'ig', pcm: 'en' };
-    const ttsLang = langMap[language] || 'en';
+    // Language mapping for Google TTS
+    const langMap = {
+      en: 'en-US',
+      yo: 'yo-NG', // Yoruba Nigeria
+      ha: 'ha-NG', // Hausa Nigeria
+      ig: 'ig-NG', // Igbo Nigeria
+      pcm: 'en-NG' // Pidgin → use Nigerian English
+    };
 
-    const tts = new gTTS(text, ttsLang);
-    const filename = path.join('/tmp', `voice_${Date.now()}.mp3`);
+    const ttsLang = langMap[language] || 'en-US';
+    const googleTTSUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${ttsLang}&client=gtx`;
 
-    tts.save(filename, function(err) {
-      if (err) {
-        console.error('[TTS ERROR]', err);
-        return res.status(500).json({ error: "TTS failed" });
-      }
-      res.sendFile(filename, () => {
-        fs.unlinkSync(filename); // Delete after send
-      });
+    const response = await fetch(googleTTSUrl);
+    const audioBuffer = await response.arrayBuffer();
+
+    res.set({
+      'Content-Type': 'audio/mpeg',
+      'Content-Length': audioBuffer.byteLength
     });
+    res.send(Buffer.from(audioBuffer));
+
   } catch (e) {
     console.error("[SPEAK ERROR]:", e);
     res.status(500).json({ error: "Speak failed" });
@@ -312,7 +314,7 @@ app.get("/get-transactions/:userId", async (req, res) => {
 
 app.get("/", (req, res) => res.json({
   status: "VoicePay Demo Server Live",
-  version: "1.5 - Body Parser Fix + TTS Audio",
+  version: "1.6 - Google TTS Audio, No ffmpeg",
   languages: ["English", "Yoruba", "Hausa", "Igbo", "Pidgin"],
   routes: ["/parse-voice-command", "/create-payment-link", "/verify-pin", "/set-pin", "/verify-voice", "/duress-alert", "/generate-receipt", "/speak", "/balance", "/get-transactions/:userId"],
   mode: "DEMO"
