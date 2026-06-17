@@ -13,6 +13,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json({ limit: '10mb' }));
+app.use(express.text({ type: 'application/json', limit: '10mb' })); // FIX FOR EMPTY BODY
 app.use(express.static('.'));
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -21,20 +22,20 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 global.VOICE_MEMORY = {};
 global.TRANSACTION_MEMORY = {};
 global.DURESS_MEMORY = {};
-global.PIN_MEMORY = {}; // NEW: Store PINs for demo
+global.PIN_MEMORY = {};
 
 async function saveToMemory(collection, docId, data) {
   if (collection === 'users') global.VOICE_MEMORY[docId] = {...global.VOICE_MEMORY[docId],...data };
   else if (collection === 'transactions') global.TRANSACTION_MEMORY[docId] = data;
   else if (collection === 'duress_logs') global.DURESS_MEMORY[docId] = data;
-  else if (collection === 'pins') global.PIN_MEMORY[docId] = data; // NEW
+  else if (collection === 'pins') global.PIN_MEMORY[docId] = data;
   return;
 }
 
 async function getFromMemory(collection, docId) {
   if (collection === 'users') return global.VOICE_MEMORY[docId] || null;
   if (collection === 'transactions') return global.TRANSACTION_MEMORY[docId] || null;
-  if (collection === 'pins') return global.PIN_MEMORY[docId] || null; // NEW
+  if (collection === 'pins') return global.PIN_MEMORY[docId] || null;
   return null;
 }
 
@@ -55,7 +56,6 @@ async function chat(prompt) {
   return completion.choices[0]?.message?.content || "";
 }
 
-// 5 LANGUAGES AI PROMPT - THIS IS THE WOW FACTOR FOR OPAY
 app.post("/parse-voice-command", async (req, res) => {
   try {
     const { transcript, userId } = req.body;
@@ -63,7 +63,6 @@ app.post("/parse-voice-command", async (req, res) => {
 
     console.log('[VOICEPAY] User said:', transcript);
 
-    // DURESS CHECK
     let duress = false;
     if (userId) {
       const userData = await getFromMemory('users', userId);
@@ -74,7 +73,6 @@ app.post("/parse-voice-command", async (req, res) => {
       }
     }
 
-    // 5 LANGUAGE SYSTEM PROMPT - ENGLISH + YORUBA + HAUSA + IGBO + PIDGIN
     const SYSTEM_PROMPT = `You are VoicePay AI for Nigerian elders. Understand broken English + 5 languages. NEVER say "I don't understand".
 
 LANGUAGE RULES:
@@ -89,21 +87,13 @@ LANGUAGE RULES:
 9. ALWAYS use ₦ Naira
 10. Be respectful: Use "please" for elders
 
-Return ONLY JSON: {"intent":"transfer|buy_airtime|check_balance|chitchat|unknown","amount":number,"recipient":string,"language_detected":"en|yo|ha|ig|pcm","confidence":0-1,"response":"short respectful reply under 12 words","needs_confirmation":boolean}
-
-EXAMPLES:
-"Ehhm send five to my daughter" → {"intent":"transfer","amount":5000,"recipient":"daughter","confidence":0.7,"response":"Send ₦5,000 to your daughter, please?","needs_confirmation":true,"language_detected":"en"}
-"Fi 2k ranṣẹ" → {"intent":"transfer","amount":2000,"recipient":null,"confidence":0.6,"response":"Send ₦2,000 to who, please?","needs_confirmation":true,"language_detected":"yo"}
-"Tura dubu biyu" → {"intent":"transfer","amount":2000,"recipient":null,"confidence":0.6,"response":"Send ₦2,000 to who, please?","needs_confirmation":true,"language_detected":"ha"}
-"Ziga puku na Chioma" → {"intent":"transfer","amount":1000,"recipient":"Chioma","confidence":0.6,"response":"Send ₦1,000 to Chioma, please?","needs_confirmation":true,"language_detected":"ig"}
-"Bawo ni" → {"intent":"chitchat","confidence":1.0,"response":"Good morning. How can I help?","language_detected":"yo"}`;
+Return ONLY JSON: {"intent":"transfer|buy_airtime|check_balance|chitchat|unknown","amount":number,"recipient":string,"language_detected":"en|yo|ha|ig|pcm","confidence":0-1,"response":"short respectful reply under 12 words","needs_confirmation":boolean}`;
 
     const text = await chat(`${SYSTEM_PROMPT}\n\nUser speech: "${transcript}"`);
     console.log('[VOICEPAY] Groq raw:', text);
     let json = extractJSON(text.trim());
     json.duress = duress;
 
-    // AUTO-RESPONSE LOGIC - THIS TEXT GOES TO FRONTEND TTS
     if (json.intent === "chitchat") {
       json.response = json.response || "Good morning. How can I help?";
       json.needs_confirmation = false;
@@ -143,7 +133,6 @@ EXAMPLES:
   }
 });
 
-// DEMO PAYMENT LINK - RETURNS LINK FOR FRONTEND
 app.post("/create-payment-link", async (req, res) => {
   try {
     const { amount, recipient, userId } = req.body;
@@ -155,7 +144,7 @@ app.post("/create-payment-link", async (req, res) => {
 
     res.json({
       success: true,
-      link: `https://voicepay-demo.com/pay/${reference}`, // FRONTEND NEEDS THIS
+      link: `https://voicepay-demo.com/pay/${reference}`,
       reference: reference,
       amount: amount,
       recipient: recipient,
@@ -167,24 +156,18 @@ app.post("/create-payment-link", async (req, res) => {
   }
 });
 
-// VOICE VERIFY - DEMO MODE
 app.post("/verify-voice", upload.single('liveVoice'), async (req, res) => {
   res.json({ match: true, confidence: 95, message: "Voice verified - demo mode" });
 });
 
-// PIN VERIFY - NEW ROUTE FOR FRONTEND PIN MODAL
 app.post("/verify-pin", async (req, res) => {
   try {
     const { userId, pin } = req.body;
-
     if (!pin || pin.length!== 4) {
       return res.json({ success: false, message: "PIN must be 4 digits" });
     }
-
-    // DEMO MODE: Accept any 4-digit PIN or check stored PIN
     const storedPin = await getFromMemory('pins', userId);
-    const isValid = storedPin? storedPin.pin === pin : true; // Accept any PIN if none stored
-
+    const isValid = storedPin? storedPin.pin === pin : true;
     if (isValid) {
       console.log(`[PIN] Verified for user: ${userId}`);
       res.json({ success: true, message: "PIN verified" });
@@ -197,15 +180,12 @@ app.post("/verify-pin", async (req, res) => {
   }
 });
 
-// SET PIN - NEW ROUTE FOR DASHBOARD SETTINGS
 app.post("/set-pin", async (req, res) => {
   try {
     const { userId, pin } = req.body;
-
     if (!pin || pin.length!== 4 ||!/^\d{4}$/.test(pin)) {
       return res.json({ success: false, message: "PIN must be 4 digits" });
     }
-
     await saveToMemory('pins', userId, { pin, createdAt: Date.now() });
     console.log(`[PIN] Set for user: ${userId}`);
     res.json({ success: true, message: "PIN saved successfully" });
@@ -214,7 +194,6 @@ app.post("/set-pin", async (req, res) => {
   }
 });
 
-// DURESS ALERT
 app.post("/duress-alert", async (req, res) => {
   const { uid } = req.body;
   await saveToMemory('users', uid, { locked: true, lastDuress: Date.now() });
@@ -227,23 +206,26 @@ app.get("/get-user/:userId", async (req, res) => {
   res.json(userData || { error: "User not found" });
 });
 
-// ==================== NEW ROUTES ADDED BELOW ====================
-
-// GENERATE VOICE RECEIPT - FOR DASHBOARD TTS - FIXED V3
+// GENERATE VOICE RECEIPT - WORKS WITH QUERY PARAMS TOO
 app.post("/generate-receipt", async (req, res) => {
   try {
-    let { amount, recipient, language = 'en' } = req.body;
+    console.log('[RECEIPT DEBUG] Content-Type:', req.headers['content-type']);
+    console.log('[RECEIPT DEBUG] Body:', req.body);
+    console.log('[RECEIPT DEBUG] Query:', req.query);
 
-    console.log('[RECEIPT DEBUG] Raw body:', req.body);
+    let { amount, recipient, language = 'yo' } = req.body;
 
-    // FIX V3: Only convert if amount exists. Don't use || 0
-    amount = (amount!== undefined && amount!== null)? Number(amount) : 5000;
+    // Fallback to query params if body empty
+    if (!amount) amount = req.query.amount;
+    if (!recipient) recipient = req.query.recipient;
+    if (!language) language = req.query.language;
+
+    amount = Number(amount) || 5000;
     recipient = recipient || "Mama";
-    language = String(language || 'en').toLowerCase().trim();
+    language = String(language).toLowerCase().trim();
 
     const amountFormatted = amount.toLocaleString();
-
-    console.log(`[RECEIPT] amount:${amount} recipient:${recipient} lang:${language}`);
+    console.log(`[RECEIPT] Final: amount:${amount} recipient:${recipient} lang:${language}`);
 
     const voices = {
       en: `Payment of ₦${amountFormatted} to ${recipient} completed successfully. Thank you for using VoicePay.`,
@@ -255,7 +237,7 @@ app.post("/generate-receipt", async (req, res) => {
 
     res.json({
       success: true,
-      voice_text: voices[language] || voices.en
+      voice_text: voices[language] || voices.yo
     });
   } catch (e) {
     console.error("[RECEIPT ERROR]:", e);
@@ -263,17 +245,13 @@ app.post("/generate-receipt", async (req, res) => {
   }
 });
 
-// GET BALANCE - DEMO MODE FOR DASHBOARD
 app.get("/balance", async (req, res) => {
   try {
     const userId = req.query.userId;
     console.log(`[BALANCE] Fetch for user: ${userId}`);
-
-    // DEMO: Return fake balance ₦125,450.00
-    // PRODUCTION: Connect to bank API here
     res.json({
       success: true,
-      balance: 12545000, // in kobo = ₦125,450
+      balance: 12545000,
       currency: "NGN",
       demo: true,
       message: "Demo mode balance"
@@ -283,16 +261,12 @@ app.get("/balance", async (req, res) => {
   }
 });
 
-// GET TRANSACTIONS - FOR DASHBOARD HISTORY
 app.get("/get-transactions/:userId", async (req, res) => {
   try {
     const userId = req.params.userId;
     const allTx = Object.values(global.TRANSACTION_MEMORY);
     const userTx = allTx.filter(tx => tx.userId === userId);
-
-    // Sort by newest first
     userTx.sort((a, b) => b.created_at - a.created_at);
-
     res.json({
       success: true,
       transactions: userTx.slice(0, 50),
@@ -305,7 +279,7 @@ app.get("/get-transactions/:userId", async (req, res) => {
 
 app.get("/", (req, res) => res.json({
   status: "VoicePay Demo Server Live",
-  version: "1.3 - 5 Languages + PIN + Balance + Receipt V3 + Demo Mode",
+  version: "1.4 - Body Parser Fix + Query Params Support",
   languages: ["English", "Yoruba", "Hausa", "Igbo", "Pidgin"],
   routes: ["/parse-voice-command", "/create-payment-link", "/verify-pin", "/set-pin", "/verify-voice", "/duress-alert", "/generate-receipt", "/balance", "/get-transactions/:userId"],
   mode: "DEMO"
