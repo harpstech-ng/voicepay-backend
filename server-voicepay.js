@@ -1,3 +1,4 @@
+
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -21,17 +22,20 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 global.VOICE_MEMORY = {};
 global.TRANSACTION_MEMORY = {};
 global.DURESS_MEMORY = {};
+global.PIN_MEMORY = {}; // NEW: Store PINs for demo
 
 async function saveToMemory(collection, docId, data) {
   if (collection === 'users') global.VOICE_MEMORY[docId] = {...global.VOICE_MEMORY[docId],...data };
   else if (collection === 'transactions') global.TRANSACTION_MEMORY[docId] = data;
   else if (collection === 'duress_logs') global.DURESS_MEMORY[docId] = data;
+  else if (collection === 'pins') global.PIN_MEMORY[docId] = data; // NEW
   return;
 }
 
 async function getFromMemory(collection, docId) {
   if (collection === 'users') return global.VOICE_MEMORY[docId] || null;
   if (collection === 'transactions') return global.TRANSACTION_MEMORY[docId] || null;
+  if (collection === 'pins') return global.PIN_MEMORY[docId] || null; // NEW
   return null;
 }
 
@@ -169,6 +173,48 @@ app.post("/verify-voice", upload.single('liveVoice'), async (req, res) => {
   res.json({ match: true, confidence: 95, message: "Voice verified - demo mode" });
 });
 
+// PIN VERIFY - NEW ROUTE FOR FRONTEND PIN MODAL
+app.post("/verify-pin", async (req, res) => {
+  try {
+    const { userId, pin } = req.body;
+
+    if (!pin || pin.length!== 4) {
+      return res.json({ success: false, message: "PIN must be 4 digits" });
+    }
+
+    // DEMO MODE: Accept any 4-digit PIN or check stored PIN
+    const storedPin = await getFromMemory('pins', userId);
+    const isValid = storedPin? storedPin.pin === pin : true; // Accept any PIN if none stored
+
+    if (isValid) {
+      console.log(`[PIN] Verified for user: ${userId}`);
+      res.json({ success: true, message: "PIN verified" });
+    } else {
+      console.log(`[PIN] Failed for user: ${userId}`);
+      res.json({ success: false, message: "Wrong PIN" });
+    }
+  } catch (e) {
+    res.status(500).json({ success: false, message: "PIN verification error" });
+  }
+});
+
+// SET PIN - NEW ROUTE FOR DASHBOARD SETTINGS
+app.post("/set-pin", async (req, res) => {
+  try {
+    const { userId, pin } = req.body;
+
+    if (!pin || pin.length!== 4 ||!/^\d{4}$/.test(pin)) {
+      return res.json({ success: false, message: "PIN must be 4 digits" });
+    }
+
+    await saveToMemory('pins', userId, { pin, createdAt: Date.now() });
+    console.log(`[PIN] Set for user: ${userId}`);
+    res.json({ success: true, message: "PIN saved successfully" });
+  } catch (e) {
+    res.status(500).json({ success: false, message: "Error saving PIN" });
+  }
+});
+
 // DURESS ALERT
 app.post("/duress-alert", async (req, res) => {
   const { uid } = req.body;
@@ -184,8 +230,9 @@ app.get("/get-user/:userId", async (req, res) => {
 
 app.get("/", (req, res) => res.json({
   status: "VoicePay Demo Server Live",
-  version: "1.0 - 5 Languages + Demo Mode",
+  version: "1.1 - 5 Languages + PIN + Demo Mode",
   languages: ["English", "Yoruba", "Hausa", "Igbo", "Pidgin"],
+  routes: ["/parse-voice-command", "/create-payment-link", "/verify-pin", "/set-pin", "/verify-voice", "/duress-alert"],
   mode: "DEMO"
 }));
 
