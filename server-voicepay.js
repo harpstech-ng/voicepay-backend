@@ -3,6 +3,9 @@ import cors from "cors";
 import dotenv from "dotenv";
 import Groq from "groq-sdk";
 import multer from "multer";
+import gTTS from 'gtts'; // NEW - for audio
+import fs from 'fs'; // NEW - for audio
+import path from 'path'; // NEW - for audio
 
 dotenv.config();
 const app = express();
@@ -245,6 +248,36 @@ app.post("/generate-receipt", async (req, res) => {
   }
 });
 
+// NEW: TEXT TO SPEECH ROUTE - ADDED AT THE END
+app.post("/speak", async (req, res) => {
+  try {
+    const { text, language = 'yo' } = req.body;
+    if (!text) return res.status(400).json({ error: "text is required" });
+
+    console.log(`[TTS] Lang:${language} Text:${text.substring(0,40)}...`);
+
+    // Map language codes for gTTS
+    const langMap = { en: 'en', yo: 'yo', ha: 'ha', ig: 'ig', pcm: 'en' };
+    const ttsLang = langMap[language] || 'en';
+
+    const tts = new gTTS(text, ttsLang);
+    const filename = path.join('/tmp', `voice_${Date.now()}.mp3`);
+
+    tts.save(filename, function(err) {
+      if (err) {
+        console.error('[TTS ERROR]', err);
+        return res.status(500).json({ error: "TTS failed" });
+      }
+      res.sendFile(filename, () => {
+        fs.unlinkSync(filename); // Delete after send
+      });
+    });
+  } catch (e) {
+    console.error("[SPEAK ERROR]:", e);
+    res.status(500).json({ error: "Speak failed" });
+  }
+});
+
 app.get("/balance", async (req, res) => {
   try {
     const userId = req.query.userId;
@@ -279,9 +312,9 @@ app.get("/get-transactions/:userId", async (req, res) => {
 
 app.get("/", (req, res) => res.json({
   status: "VoicePay Demo Server Live",
-  version: "1.4 - Body Parser Fix + Query Params Support",
+  version: "1.5 - Body Parser Fix + TTS Audio",
   languages: ["English", "Yoruba", "Hausa", "Igbo", "Pidgin"],
-  routes: ["/parse-voice-command", "/create-payment-link", "/verify-pin", "/set-pin", "/verify-voice", "/duress-alert", "/generate-receipt", "/balance", "/get-transactions/:userId"],
+  routes: ["/parse-voice-command", "/create-payment-link", "/verify-pin", "/set-pin", "/verify-voice", "/duress-alert", "/generate-receipt", "/speak", "/balance", "/get-transactions/:userId"],
   mode: "DEMO"
 }));
 
