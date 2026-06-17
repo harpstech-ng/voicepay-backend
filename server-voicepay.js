@@ -1,4 +1,3 @@
-
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -228,11 +227,75 @@ app.get("/get-user/:userId", async (req, res) => {
   res.json(userData || { error: "User not found" });
 });
 
+// ==================== NEW ROUTES ADDED BELOW ====================
+
+// GENERATE VOICE RECEIPT - FOR DASHBOARD TTS
+app.post("/generate-receipt", async (req, res) => {
+  try {
+    const { amount, recipient, language = 'en' } = req.body;
+
+    const voices = {
+      en: `Payment of ₦${amount.toLocaleString()} to ${recipient} completed successfully. Thank you for using VoicePay.`,
+      yo: `Owo ₦${amount.toLocaleString()} ti lọ si ${recipient} ni aṣeyọri. Ṣeun fun lilo VoicePay.`,
+      ha: `Kudi ₦${amount.toLocaleString()} sun tafi zuwa ${recipient} lafiya. Na gode da amfani da VoicePay.`,
+      ig: `Ego ₦${amount.toLocaleString()} agaala nye ${recipient} nke ọma. Daalụ maka iji VoicePay.`,
+      pcm: `Money ₦${amount.toLocaleString()} don reach ${recipient} finish. Thank you for using VoicePay.`
+    };
+
+    res.json({
+      success: true,
+      voice_text: voices[language] || voices.en
+    });
+  } catch (e) {
+    res.status(500).json({ error: "Receipt generation failed" });
+  }
+});
+
+// GET BALANCE - DEMO MODE FOR DASHBOARD
+app.get("/balance", async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    console.log(`[BALANCE] Fetch for user: ${userId}`);
+
+    // DEMO: Return fake balance ₦125,450.00
+    // PRODUCTION: Connect to bank API here
+    res.json({
+      success: true,
+      balance: 12545000, // in kobo = ₦125,450
+      currency: "NGN",
+      demo: true,
+      message: "Demo mode balance"
+    });
+  } catch (e) {
+    res.status(500).json({ error: "Balance fetch failed" });
+  }
+});
+
+// GET TRANSACTIONS - FOR DASHBOARD HISTORY
+app.get("/get-transactions/:userId", async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const allTx = Object.values(global.TRANSACTION_MEMORY);
+    const userTx = allTx.filter(tx => tx.userId === userId);
+
+    // Sort by newest first
+    userTx.sort((a, b) => b.created_at - a.created_at);
+
+    res.json({
+      success: true,
+      transactions: userTx.slice(0, 50),
+      count: userTx.length
+    });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to fetch transactions" });
+  }
+});
+
 app.get("/", (req, res) => res.json({
   status: "VoicePay Demo Server Live",
-  version: "1.1 - 5 Languages + PIN + Demo Mode",
+  version: "1.2 - 5 Languages + PIN + Balance + Receipt + Demo Mode",
   languages: ["English", "Yoruba", "Hausa", "Igbo", "Pidgin"],
-  routes: ["/parse-voice-command", "/create-payment-link", "/verify-pin", "/set-pin", "/verify-voice", "/duress-alert"],
+  routes: ["/parse-voice-command", "/create-payment-link", "/verify-pin", "/set-pin", "/verify-voice", "/duress-alert", "/generate-receipt", "/balance", "/get-transactions/:userId"],
   mode: "DEMO"
 }));
 
