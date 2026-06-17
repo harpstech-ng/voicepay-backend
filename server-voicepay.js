@@ -229,15 +229,21 @@ app.get("/get-user/:userId", async (req, res) => {
 
 // ==================== NEW ROUTES ADDED BELOW ====================
 
-// GENERATE VOICE RECEIPT - FOR DASHBOARD TTS - FIXED
+// GENERATE VOICE RECEIPT - FOR DASHBOARD TTS - FIXED V3
 app.post("/generate-receipt", async (req, res) => {
   try {
     let { amount, recipient, language = 'en' } = req.body;
 
-    // FIX: Convert amount to number so toLocaleString won't crash
-    amount = Number(amount) || 0;
-    recipient = recipient || "recipient";
+    console.log('[RECEIPT DEBUG] Raw body:', req.body);
+
+    // FIX V3: Only convert if amount exists. Don't use || 0
+    amount = (amount!== undefined && amount!== null)? Number(amount) : 5000;
+    recipient = recipient || "Mama";
+    language = String(language || 'en').toLowerCase().trim();
+
     const amountFormatted = amount.toLocaleString();
+
+    console.log(`[RECEIPT] amount:${amount} recipient:${recipient} lang:${language}`);
 
     const voices = {
       en: `Payment of ₦${amountFormatted} to ${recipient} completed successfully. Thank you for using VoicePay.`,
@@ -299,7 +305,7 @@ app.get("/get-transactions/:userId", async (req, res) => {
 
 app.get("/", (req, res) => res.json({
   status: "VoicePay Demo Server Live",
-  version: "1.2 - 5 Languages + PIN + Balance + Receipt + Demo Mode",
+  version: "1.3 - 5 Languages + PIN + Balance + Receipt V3 + Demo Mode",
   languages: ["English", "Yoruba", "Hausa", "Igbo", "Pidgin"],
   routes: ["/parse-voice-command", "/create-payment-link", "/verify-pin", "/set-pin", "/verify-voice", "/duress-alert", "/generate-receipt", "/balance", "/get-transactions/:userId"],
   mode: "DEMO"
