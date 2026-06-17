@@ -229,17 +229,22 @@ app.get("/get-user/:userId", async (req, res) => {
 
 // ==================== NEW ROUTES ADDED BELOW ====================
 
-// GENERATE VOICE RECEIPT - FOR DASHBOARD TTS
+// GENERATE VOICE RECEIPT - FOR DASHBOARD TTS - FIXED
 app.post("/generate-receipt", async (req, res) => {
   try {
-    const { amount, recipient, language = 'en' } = req.body;
+    let { amount, recipient, language = 'en' } = req.body;
+
+    // FIX: Convert amount to number so toLocaleString won't crash
+    amount = Number(amount) || 0;
+    recipient = recipient || "recipient";
+    const amountFormatted = amount.toLocaleString();
 
     const voices = {
-      en: `Payment of ₦${amount.toLocaleString()} to ${recipient} completed successfully. Thank you for using VoicePay.`,
-      yo: `Owo ₦${amount.toLocaleString()} ti lọ si ${recipient} ni aṣeyọri. Ṣeun fun lilo VoicePay.`,
-      ha: `Kudi ₦${amount.toLocaleString()} sun tafi zuwa ${recipient} lafiya. Na gode da amfani da VoicePay.`,
-      ig: `Ego ₦${amount.toLocaleString()} agaala nye ${recipient} nke ọma. Daalụ maka iji VoicePay.`,
-      pcm: `Money ₦${amount.toLocaleString()} don reach ${recipient} finish. Thank you for using VoicePay.`
+      en: `Payment of ₦${amountFormatted} to ${recipient} completed successfully. Thank you for using VoicePay.`,
+      yo: `Owo ₦${amountFormatted} ti lọ si ${recipient} ni aṣeyọri. Ṣeun fun lilo VoicePay.`,
+      ha: `Kudi ₦${amountFormatted} sun tafi zuwa ${recipient} lafiya. Na gode da amfani da VoicePay.`,
+      ig: `Ego ₦${amountFormatted} agaala nye ${recipient} nke ọma. Daalụ maka iji VoicePay.`,
+      pcm: `Money ₦${amountFormatted} don reach ${recipient} finish. Thank you for using VoicePay.`
     };
 
     res.json({
@@ -247,7 +252,8 @@ app.post("/generate-receipt", async (req, res) => {
       voice_text: voices[language] || voices.en
     });
   } catch (e) {
-    res.status(500).json({ error: "Receipt generation failed" });
+    console.error("[RECEIPT ERROR]:", e);
+    res.status(500).json({ error: "Receipt generation failed", details: e.message });
   }
 });
 
