@@ -17,7 +17,7 @@ app.use(express.static('.'));
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// DEMO MEMORY STORAGE
+// DEMO MEMORY STORAGE - NO DATABASE NEEDED
 global.VOICE_MEMORY = {};
 global.TRANSACTION_MEMORY = {};
 global.DURESS_MEMORY = {};
@@ -52,8 +52,8 @@ async function chat(prompt) {
   return completion.choices[0]?.message?.content || "";
 }
 
-// 5 LANGUAGES AI PROMPT - THIS IS THE WOW FACTOR
-app.post("/parse", async (req, res) => {
+// 5 LANGUAGES AI PROMPT - THIS IS THE WOW FACTOR FOR OPAY
+app.post("/parse-voice-command", async (req, res) => {
   try {
     const { transcript, userId } = req.body;
     if (!transcript) return res.status(400).json({ error: "transcript is required" });
@@ -140,7 +140,7 @@ EXAMPLES:
   }
 });
 
-// DEMO PAYMENT LINK
+// DEMO PAYMENT LINK - RETURNS LINK FOR FRONTEND
 app.post("/create-payment-link", async (req, res) => {
   try {
     const { amount, recipient, userId } = req.body;
@@ -152,7 +152,10 @@ app.post("/create-payment-link", async (req, res) => {
 
     res.json({
       success: true,
+      link: `https://voicepay-demo.com/pay/${reference}`, // FRONTEND NEEDS THIS
       reference: reference,
+      amount: amount,
+      recipient: recipient,
       message: "Demo payment successful",
       mock: true
     });
@@ -186,5 +189,5 @@ app.get("/", (req, res) => res.json({
   mode: "DEMO"
 }));
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`[VOICEPAY DEMO] Server on port ${PORT}`));
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`[VOICEPAY DEMO] Server running on port ${PORT}`));
