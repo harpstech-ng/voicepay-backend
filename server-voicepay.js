@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import Groq from "groq-sdk";
 import multer from "multer";
+import googleTTS from "google-tts-api"; // NEW - FREE TTS
 
 dotenv.config();
 const app = express();
@@ -13,10 +14,12 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json({ limit: '10mb' }));
-app.use(express.text({ type: 'application/json', limit: '10mb' })); // FIX FOR EMPTY BODY
+app.use(express.text({ type: 'application/json', limit: '10mb' }));
 app.use(express.static('.'));
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+// REMOVED: Google Cloud TTS Client - no key needed now
 
 // DEMO MEMORY STORAGE - NO DATABASE NEEDED
 global.VOICE_MEMORY = {};
@@ -206,7 +209,6 @@ app.get("/get-user/:userId", async (req, res) => {
   res.json(userData || { error: "User not found" });
 });
 
-// GENERATE VOICE RECEIPT - WORKS WITH QUERY PARAMS TOO
 app.post("/generate-receipt", async (req, res) => {
   try {
     console.log('[RECEIPT DEBUG] Content-Type:', req.headers['content-type']);
@@ -215,7 +217,6 @@ app.post("/generate-receipt", async (req, res) => {
 
     let { amount, recipient, language = 'yo' } = req.body;
 
-    // Fallback to query params if body empty
     if (!amount) amount = req.query.amount;
     if (!recipient) recipient = req.query.recipient;
     if (!language) language = req.query.language;
@@ -229,9 +230,9 @@ app.post("/generate-receipt", async (req, res) => {
 
     const voices = {
       en: `Payment of ₦${amountFormatted} to ${recipient} completed successfully. Thank you for using VoicePay.`,
-      yo: `Owo ₦${amountFormatted} ti lọ si ${recipient} ni aṣeyọri. Ṣeun fun lilo VoicePay.`,
+      yo: `Owo ₦${amountFormatted} ti lo si ${recipient} ni aseyori. Seun fun lilo VoicePay.`,
       ha: `Kudi ₦${amountFormatted} sun tafi zuwa ${recipient} lafiya. Na gode da amfani da VoicePay.`,
-      ig: `Ego ₦${amountFormatted} agaala nye ${recipient} nke ọma. Daalụ maka iji VoicePay.`,
+      ig: `Ego ₦${amountFormatted} agaala nye ${recipient} nke oma. Daalu maka iji VoicePay.`,
       pcm: `Money ₦${amountFormatted} don reach ${recipient} finish. Thank you for using VoicePay.`
     };
 
@@ -245,27 +246,34 @@ app.post("/generate-receipt", async (req, res) => {
   }
 });
 
-// NEW: GOOGLE TTS - NO FFMPEG NEEDED, WORKS ON RENDER
+// FREE TTS - NO GOOGLE CLOUD KEY NEEDED
 app.post("/speak", async (req, res) => {
   try {
-    const { text, language = 'yo' } = req.body;
+    const { text, language = 'yo', slow = false } = req.body;
     if (!text) return res.status(400).json({ error: "text is required" });
 
-    console.log(`[GOOGLE TTS] Lang:${language} Text:${text.substring(0,40)}...`);
+    console.log(`[FREE TTS] Lang:${language} Text:${text.substring(0,40)}...`);
 
-    // Language mapping for Google TTS
+    // Language codes Google Translate supports
     const langMap = {
-      en: 'en-US',
-      yo: 'yo-NG', // Yoruba Nigeria
-      ha: 'ha-NG', // Hausa Nigeria
-      ig: 'ig-NG', // Igbo Nigeria
-      pcm: 'en-NG' // Pidgin → use Nigerian English
+      en: 'en',
+      yo: 'yo', // Yoruba works
+      ha: 'ha', // Hausa works
+      ig: 'ig', // Igbo works
+      pcm: 'en' // Pidgin = English
     };
 
-    const ttsLang = langMap[language] || 'en-US';
-    const googleTTSUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${ttsLang}&client=gtx`;
+    const ttsLang = langMap[language] || 'en';
 
-    const response = await fetch(googleTTSUrl);
+    // Generate TTS URL - free, no key
+    const url = googleTTS.getAudioUrl(text, {
+      lang: ttsLang,
+      slow: slow,
+      host: 'https://translate.google.com',
+    });
+
+    // Fetch the audio and send to user
+    const response = await fetch(url);
     const audioBuffer = await response.arrayBuffer();
 
     res.set({
@@ -276,7 +284,7 @@ app.post("/speak", async (req, res) => {
 
   } catch (e) {
     console.error("[SPEAK ERROR]:", e);
-    res.status(500).json({ error: "Speak failed" });
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -314,7 +322,7 @@ app.get("/get-transactions/:userId", async (req, res) => {
 
 app.get("/", (req, res) => res.json({
   status: "VoicePay Demo Server Live",
-  version: "1.6 - Google TTS Audio, No ffmpeg",
+  version: "1.8 - Free TTS No Key",
   languages: ["English", "Yoruba", "Hausa", "Igbo", "Pidgin"],
   routes: ["/parse-voice-command", "/create-payment-link", "/verify-pin", "/set-pin", "/verify-voice", "/duress-alert", "/generate-receipt", "/speak", "/balance", "/get-transactions/:userId"],
   mode: "DEMO"
