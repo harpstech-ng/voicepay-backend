@@ -13,6 +13,14 @@ app.use(cors({
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+app.options('*', cors()); // FIX 1: Handle Render preflight requests - META AI ADDED
+
+// FIX 2: Log every request so you see it in Render logs - META AI ADDED
+app.use((req, res, next) => {
+  console.log(`[REQUEST] ${req.method} ${req.path} from ${req.headers.origin}`);
+  next();
+});
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.text({ type: 'application/json', limit: '10mb' }));
 app.use(express.static('.'));
@@ -312,7 +320,7 @@ app.get("/get-transactions/:userId", async (req, res) => {
 
 app.get("/", (req, res) => res.json({
   status: "VoicePay Demo Server Live",
-  version: "1.9 - Fixed TTS en-NG Fallback",
+  version: "2.0 - Fixed CORS + Logging",
   languages: ["English", "Yoruba", "Hausa", "Igbo", "Pidgin"],
   routes: ["/parse-voice-command", "/create-payment-link", "/verify-pin", "/set-pin", "/verify-voice", "/duress-alert", "/generate-receipt", "/speak", "/balance", "/get-transactions/:userId"],
   mode: "DEMO"
