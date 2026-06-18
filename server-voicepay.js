@@ -1,5 +1,4 @@
 import express from "express";
-import cors from "cors";
 import dotenv from "dotenv";
 import Groq from "groq-sdk";
 import multer from "multer";
@@ -8,18 +7,24 @@ import googleTTS from "google-tts-api";
 dotenv.config();
 const app = express();
 
-app.use(cors({
-  origin: ['https://harpstech-ng.github.io', 'http://localhost:3000', 'http://127.0.0.1:5500', 'http://localhost:5500'],
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-app.options('*', cors()); // FIX 1: Handle Render preflight requests - META AI ADDED
+// ===== META AI FINAL CORS FIX - WORKS ON ALL DEVICES =====
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
 
-// FIX 2: Log every request so you see it in Render logs - META AI ADDED
+// Log every request so you see it in Render logs
 app.use((req, res, next) => {
   console.log(`[REQUEST] ${req.method} ${req.path} from ${req.headers.origin}`);
   next();
 });
+// ===== END CORS FIX =====
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.text({ type: 'application/json', limit: '10mb' }));
@@ -254,12 +259,11 @@ app.post("/speak", async (req, res) => {
 
     console.log(`[FREE TTS] Lang:${language} Text:${text.substring(0,40)}...`);
 
-    // FIXED: Google Translate only supports these. yo/ig → use en-NG
     const langMap = {
       en: 'en',
-      yo: 'en-NG', // Nigerian English for Yoruba
+      yo: 'en-NG',
       ha: 'ha',
-      ig: 'en-NG', // Nigerian English for Igbo
+      ig: 'en-NG',
       pcm: 'en-NG'
     };
 
@@ -320,7 +324,7 @@ app.get("/get-transactions/:userId", async (req, res) => {
 
 app.get("/", (req, res) => res.json({
   status: "VoicePay Demo Server Live",
-  version: "2.0 - Fixed CORS + Logging",
+  version: "3.0 - Universal CORS",
   languages: ["English", "Yoruba", "Hausa", "Igbo", "Pidgin"],
   routes: ["/parse-voice-command", "/create-payment-link", "/verify-pin", "/set-pin", "/verify-voice", "/duress-alert", "/generate-receipt", "/speak", "/balance", "/get-transactions/:userId"],
   mode: "DEMO"
