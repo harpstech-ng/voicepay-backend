@@ -3,7 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import Groq from "groq-sdk";
 import multer from "multer";
-import googleTTS from "google-tts-api"; // NEW - FREE TTS
+import googleTTS from "google-tts-api";
 
 dotenv.config();
 const app = express();
@@ -19,9 +19,7 @@ app.use(express.static('.'));
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// REMOVED: Google Cloud TTS Client - no key needed now
-
-// DEMO MEMORY STORAGE - NO DATABASE NEEDED
+// DEMO MEMORY STORAGE
 global.VOICE_MEMORY = {};
 global.TRANSACTION_MEMORY = {};
 global.DURESS_MEMORY = {};
@@ -211,12 +209,7 @@ app.get("/get-user/:userId", async (req, res) => {
 
 app.post("/generate-receipt", async (req, res) => {
   try {
-    console.log('[RECEIPT DEBUG] Content-Type:', req.headers['content-type']);
-    console.log('[RECEIPT DEBUG] Body:', req.body);
-    console.log('[RECEIPT DEBUG] Query:', req.query);
-
     let { amount, recipient, language = 'yo' } = req.body;
-
     if (!amount) amount = req.query.amount;
     if (!recipient) recipient = req.query.recipient;
     if (!language) language = req.query.language;
@@ -226,7 +219,6 @@ app.post("/generate-receipt", async (req, res) => {
     language = String(language).toLowerCase().trim();
 
     const amountFormatted = amount.toLocaleString();
-    console.log(`[RECEIPT] Final: amount:${amount} recipient:${recipient} lang:${language}`);
 
     const voices = {
       en: `Payment of ₦${amountFormatted} to ${recipient} completed successfully. Thank you for using VoicePay.`,
@@ -246,7 +238,7 @@ app.post("/generate-receipt", async (req, res) => {
   }
 });
 
-// FREE TTS - NO GOOGLE CLOUD KEY NEEDED
+// FIXED: FREE TTS WITH en-NG FALLBACK FOR YORUBA/IGBO
 app.post("/speak", async (req, res) => {
   try {
     const { text, language = 'yo', slow = false } = req.body;
@@ -254,25 +246,23 @@ app.post("/speak", async (req, res) => {
 
     console.log(`[FREE TTS] Lang:${language} Text:${text.substring(0,40)}...`);
 
-    // Language codes Google Translate supports
+    // FIXED: Google Translate only supports these. yo/ig → use en-NG
     const langMap = {
       en: 'en',
-      yo: 'yo', // Yoruba works
-      ha: 'ha', // Hausa works
-      ig: 'ig', // Igbo works
-      pcm: 'en' // Pidgin = English
+      yo: 'en-NG', // Nigerian English for Yoruba
+      ha: 'ha',
+      ig: 'en-NG', // Nigerian English for Igbo
+      pcm: 'en-NG'
     };
 
     const ttsLang = langMap[language] || 'en';
 
-    // Generate TTS URL - free, no key
     const url = googleTTS.getAudioUrl(text, {
       lang: ttsLang,
       slow: slow,
       host: 'https://translate.google.com',
     });
 
-    // Fetch the audio and send to user
     const response = await fetch(url);
     const audioBuffer = await response.arrayBuffer();
 
@@ -322,7 +312,7 @@ app.get("/get-transactions/:userId", async (req, res) => {
 
 app.get("/", (req, res) => res.json({
   status: "VoicePay Demo Server Live",
-  version: "1.8 - Free TTS No Key",
+  version: "1.9 - Fixed TTS en-NG Fallback",
   languages: ["English", "Yoruba", "Hausa", "Igbo", "Pidgin"],
   routes: ["/parse-voice-command", "/create-payment-link", "/verify-pin", "/set-pin", "/verify-voice", "/duress-alert", "/generate-receipt", "/speak", "/balance", "/get-transactions/:userId"],
   mode: "DEMO"
