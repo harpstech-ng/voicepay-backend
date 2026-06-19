@@ -251,45 +251,26 @@ app.post("/generate-receipt", async (req, res) => {
   }
 });
 
-// FIXED: FREE TTS WITH en-NG FALLBACK FOR YORUBA/IGBO
+// FIXED: NO GOOGLE TTS - USE BROWSER VOICE SILENTLY
 app.post("/speak", async (req, res) => {
   try {
-    const { text, language = 'yo', slow = false } = req.body;
+    const { text, language = 'yo' } = req.body;
     if (!text) return res.status(400).json({ error: "text is required" });
-
-    console.log(`[FREE TTS] Lang:${language} Text:${text.substring(0,40)}...`);
-
-    const langMap = {
-      en: 'en',
-      yo: 'en-NG',
-      ha: 'ha',
-      ig: 'en-NG',
-      pcm: 'en-NG'
-    };
-
-    const ttsLang = langMap[language] || 'en';
-
-    const url = googleTTS.getAudioUrl(text, {
-      lang: ttsLang,
-      slow: slow,
-      host: 'https://translate.google.com',
+    
+    console.log(`[TTS] Lang:${language} Text:${text.substring(0,40)}...`);
+    
+    // Just acknowledge. Browser handles voice. No more Google block
+    res.json({
+      success: true,
+      message: "Voice handled by browser TTS",
+      text: text
     });
-
-    const response = await fetch(url);
-    const audioBuffer = await response.arrayBuffer();
-
-    res.set({
-      'Content-Type': 'audio/mpeg',
-      'Content-Length': audioBuffer.byteLength
-    });
-    res.send(Buffer.from(audioBuffer));
-
+    
   } catch (e) {
     console.error("[SPEAK ERROR]:", e);
     res.status(500).json({ error: e.message });
   }
 });
-
 app.get("/balance", async (req, res) => {
   try {
     const userId = req.query.userId;
